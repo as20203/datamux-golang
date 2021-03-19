@@ -1,0 +1,1 @@
+Customer data server implementation to accept the incoming data from the activation app
