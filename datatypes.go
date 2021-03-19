@@ -7,7 +7,7 @@ type device struct {
 	Endpointdest string
 	AccessToken  string
 	Customer     string
-    InclRadio    bool
+	InclRadio    bool
 	RawData      bool
 }
 
@@ -39,10 +39,9 @@ type loradata struct {
 	GatewayRx []gatewayrx `json:"gatewayRx,omitempty"`
 }
 type downlinkdata struct {
-    DeviceEui string      `json:"deviceEui"`
-	Command   string      `json:"command"`
-    value uint64     `json:"value"`	
-    AccessToken      string      `json:"access_token"`
-	Devicetype   string     `json:"devicetype"`
-	
+	DeviceEui   string `json:"deviceEui"`
+	Command     string `json:"command"`
+	value       uint64 `json:"value"`
+	AccessToken string `json:"access_token"`
+	Devicetype  string `json:"devicetype"`
 }
