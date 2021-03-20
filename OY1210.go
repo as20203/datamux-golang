@@ -77,10 +77,10 @@ func publishOY1210Data(dev device, entry loradata, parsedvalues []OY1210Data) {
 		return
 	}
 
-	if dev.RawData == false {
+	if !dev.RawData {
 		var decodeddata decoded1210data
 		if err := json.Unmarshal([]byte(loradatabytes), &decodeddata); err != nil {
-			//fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
+			fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
 		}
 		decodeddata.Data = append(decodeddata.Data, parsedvalues...)
 

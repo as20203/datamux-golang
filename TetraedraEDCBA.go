@@ -5,24 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-//	"strconv"
+	//	"strconv"
 )
 
 type TetraedraEDCBAData struct {
-	Time        time.Time
+	Time         time.Time
 	MeterReading string
-	
-
 }
 
 type decodedTetraedraEDCBAdata struct {
-	DeviceEui string       `json:"deviceEui"`
-	Seqno     uint32       `json:"seqno"`
-	Port      uint8        `json:"port"`
-	AppEui    string       `json:"appEui"`
-	Time      string       `json:"time"`
-	DeviceTx  devicetx     `json:"deviceTx,omitempty"`
-	GatewayRx []gatewayrx  `json:"gatewayRx,omitempty"`
+	DeviceEui string               `json:"deviceEui"`
+	Seqno     uint32               `json:"seqno"`
+	Port      uint8                `json:"port"`
+	AppEui    string               `json:"appEui"`
+	Time      string               `json:"time"`
+	DeviceTx  devicetx             `json:"deviceTx,omitempty"`
+	GatewayRx []gatewayrx          `json:"gatewayRx,omitempty"`
 	Data      []TetraedraEDCBAData `json:"data,omitempty"`
 }
 
@@ -35,54 +33,49 @@ func parseTetraedraEDCBADataData(receivedtime time.Time, port uint8, receiveddat
 	//Input Validation
 	//Length should be a multiple of 6
 	databytes, _ := base64.StdEncoding.DecodeString(receiveddata)
-fmt.Println("databytes", databytes)
-dst := ByteToHex(databytes)
-fmt.Println("Hex=",dst)
- //first := dst[24:26]
-first1 := dst[26:27]
-first2 := dst[28:30]
-first3 := dst[30:32]
-first4 := dst[32:34]
-first5 := dst[34:36]
+	fmt.Println("databytes", databytes)
+	dst := ByteToHex(databytes)
+	fmt.Println("Hex=", dst)
+	//first := dst[24:26]
+	first1 := dst[26:27]
+	first2 := dst[28:30]
+	first3 := dst[30:32]
+	first4 := dst[32:34]
+	first5 := dst[34:36]
 
+	fmt.Println("first1=", first1)
+	fmt.Println("first2=", first2)
+	fmt.Println("first3=", first3)
+	fmt.Println("first4=", first4)
+	fmt.Println("first5=", first5)
 
-fmt.Println("first1=",first1)
-fmt.Println("first2=",first2)
-fmt.Println("first3=",first3)
-fmt.Println("first4=",first4)
-fmt.Println("first5=",first5)
+	str := first5 + first4 + first3 + first2 + first1
+	/*
+	   str1, err := strconv.ParseInt(str, 10, 64)
+	   	if err == nil {
+	   		fmt.Println(str1)
+	   	}
 
-str:=first5+first4+first3+first2+first1
-/*
-str1, err := strconv.ParseInt(str, 10, 64)
-	if err == nil {
-		fmt.Println(str1)
+	   fmt.Println("str=",str)
+	   fmt.Println(str1)
+	*/
+	var parsedvalues []TetraedraEDCBAData
+
+	fmt.Println("len(databytes):", len(databytes))
+	if len(databytes)%18 == 0 {
+		// return nil
+		//databytes = databytes[1:]
+		capacity := len(databytes) / 18
+		parsedvalues = make([]TetraedraEDCBAData, capacity)
+		for index := 0; index < capacity; index++ {
+
+			parsedvalues[index].MeterReading = str
+			parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
+		}
+
 	}
 
-fmt.Println("str=",str)
-fmt.Println(str1)
-*/
-	var parsedvalues []TetraedraEDCBAData
-        
-              fmt.Println("len(databytes):", len(databytes))
-                if len(databytes)%18 == 0 {
-                       // return nil
-				//databytes = databytes[1:]
-                capacity := len(databytes) / 18
-                parsedvalues = make([]TetraedraEDCBAData, capacity)
-                for index := 0; index < capacity; index++ {
-                        
-                        parsedvalues[index].MeterReading = str
-						parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
-                }
-
-                }
-			
-		
-				
-				
-
-fmt.Println("parsedvalues: ", parsedvalues)
+	fmt.Println("parsedvalues: ", parsedvalues)
 	return parsedvalues
 }
 
@@ -93,10 +86,10 @@ func publishTetraedraEDCBAData(dev device, entry loradata, parsedvalues []Tetrae
 		return
 	}
 
-	if dev.RawData == false {
+	if !dev.RawData {
 		var decodeddata decodedTetraedraEDCBAdata
 		if err := json.Unmarshal([]byte(loradatabytes), &decodeddata); err != nil {
-			//fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
+			fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
 		}
 		decodeddata.Data = append(decodeddata.Data, parsedvalues...)
 

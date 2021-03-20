@@ -1,16 +1,19 @@
 package main
 
 import (
-	"encoding/csv"
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/naoina/toml"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 //Global structure for configuration data
@@ -23,7 +26,7 @@ type tomlConfig struct {
 var config tomlConfig
 
 //File pointers
-var fpOnYieldData *os.File
+// var fpOnYieldData *os.File
 
 func readConfig() {
 
@@ -53,83 +56,79 @@ func printConfig() {
 	fmt.Println("  ")
 }
 
-func saveConfig() {
-
-	b, err := toml.Marshal(config)
-	if err != nil {
-		panic(err)
-	}
-
-	f, err := os.Create("config.dat") //os.OpenFile("config2.dat", os.O_WRONLY, 0644)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	_, err = f.Write(b)
-	if err != nil {
-		fmt.Println(err)
-		f.Close()
-	}
-	f.Close()
-	return
-}
-
 func findDeviceEUI(deviceeui string) (device, error) {
-	var elem device
-	for _, elem = range config.Devices {
-		if strings.ToLower(elem.Deviceeui) == strings.ToLower(deviceeui) {
-			return elem, nil
-		}
-	}
-	return device{}, errors.New("Unknown Device: " + deviceeui)
-}
-
-func createOutputFiles() {
-	Filename := "OnYieldData" + time.Now().Format("_02_01_15_04_05") + ".csv"
-	var err error
-	fpOnYieldData, err = os.Create(Filename)
+	uri := "mongodb://localhost:27017/datamux"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
 		panic(err)
 	}
-
-	w := csv.NewWriter(fpOnYieldData)
-	err = w.Write([]string{"Time", "DevEUI", "Temperature", "Humidity"})
-	if err != nil {
-		panic(err)
-	}
-	w.Flush()
-	if err = w.Error(); err != nil {
-		log.Fatal(err)
-	}
-	//defer fpOnYieldData.Close()
-}
-
-func storeOnYieldData(deviceEUI string, parsedvalues []onyielddata) bool {
-
-	for _, v := range parsedvalues {
-		fmt.Println(v.Time.Format(time.StampMilli), deviceEUI, fmt.Sprint(v.Temperature), fmt.Sprint(v.RelativeHumidity),fmt.Sprint(v.AbsoluteHumidity))
-		w := csv.NewWriter(fpOnYieldData)
-		err := w.Write([]string{v.Time.Format(time.StampMilli), deviceEUI, fmt.Sprint(v.Temperature), fmt.Sprint(v.RelativeHumidity),fmt.Sprint(v.AbsoluteHumidity)})
-		if err != nil {
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
 			panic(err)
 		}
-		w.Flush()
-		if err := w.Error(); err != nil {
-			log.Fatal(err)
-		}
+	}()
+	// Ping the primary
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		panic(err)
 	}
-	return true
+	var retrievedDevice device
+	datamuxDatabase := client.Database("datamux")
+	devicesCollection := datamuxDatabase.Collection("devices")
+
+	if err = devicesCollection.FindOne(ctx, bson.M{"deviceeui": deviceeui}).Decode(&retrievedDevice); err != nil {
+		return device{}, errors.New("Unknown Device: " + deviceeui)
+	} else {
+		return retrievedDevice, nil
+	}
 }
+
+// func createOutputFiles() {
+// 	Filename := "OnYieldData" + time.Now().Format("_02_01_15_04_05") + ".csv"
+// 	var err error
+// 	fpOnYieldData, err = os.Create(Filename)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+
+// 	w := csv.NewWriter(fpOnYieldData)
+// 	err = w.Write([]string{"Time", "DevEUI", "Temperature", "Humidity"})
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	w.Flush()
+// 	if err = w.Error(); err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	//defer fpOnYieldData.Close()
+// }
+
+// func storeOnYieldData(deviceEUI string, parsedvalues []onyielddata) bool {
+
+// 	for _, v := range parsedvalues {
+// 		fmt.Println(v.Time.Format(time.StampMilli), deviceEUI, fmt.Sprint(v.Temperature), fmt.Sprint(v.RelativeHumidity), fmt.Sprint(v.AbsoluteHumidity))
+// 		w := csv.NewWriter(fpOnYieldData)
+// 		err := w.Write([]string{v.Time.Format(time.StampMilli), deviceEUI, fmt.Sprint(v.Temperature), fmt.Sprint(v.RelativeHumidity), fmt.Sprint(v.AbsoluteHumidity)})
+// 		if err != nil {
+// 			panic(err)
+// 		}
+// 		w.Flush()
+// 		if err := w.Error(); err != nil {
+// 			log.Fatal(err)
+// 		}
+// 	}
+// 	return true
+// }
 
 /*Data Generator for ESAB*/
-func decodeESABData() []byte {
-	return nil
-}
+// func decodeESABData() []byte {
+// 	return nil
+// }
 
-func decodeTrackerData() []byte {
-	return nil
-}
+// func decodeTrackerData() []byte {
+// 	return nil
+// }
 
 /* Generic function for decoding data
 Add a case for each type of device and add a function of its own
@@ -139,12 +138,11 @@ If no device type is specified, then 313233343536 is returned as data*/
 
 func decodeDataDownlink(dev device, entry downlinkdata) bool {
 
-		  
-      fmt.Println("downlink correct place")
-                  
-      publishDownlinkData(dev, entry)
-         return true		
-		
+	fmt.Println("downlink correct place")
+
+	publishDownlinkData(dev, entry)
+	return true
+
 }
 func decodeData(dev device, entry loradata) bool {
 	switch strings.ToLower(dev.Devicetype) {
@@ -180,26 +178,26 @@ func decodeData(dev device, entry loradata) bool {
 		publishOY1700Data(dev, entry, parsedvalues)
 		//storeOnYieldData(deviceEUI, parsedvalues)
 		return true
-          case "oy1200":
-                fmt.Println("OY1200")
-                parsedvalues := parseOY1200Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-                if len(parsedvalues) == 0 {
-                        return false
-                }
+	case "oy1200":
+		fmt.Println("OY1200")
+		parsedvalues := parseOY1200Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
 
-                //Irrespective of the publish result, we must respond SUCCESS to the network server
-                publishOY1200Data(dev, entry, parsedvalues)
-                //storeOnYieldData(deviceEUI, parsedvalues)
-                return true
+		//Irrespective of the publish result, we must respond SUCCESS to the network server
+		publishOY1200Data(dev, entry, parsedvalues)
+		//storeOnYieldData(deviceEUI, parsedvalues)
+		return true
 	case "oy1700v1":
 		fmt.Println("OY1700V1")
 		parsedvalues := parseOY1700V1Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
 		if len(parsedvalues) == 0 {
 			return false
 		}
-	
+
 		publishOY1700V1Data(dev, entry, parsedvalues)
-		
+
 		return true
 	case "peoplecounter":
 		fmt.Println("PeopleCounter")
@@ -207,114 +205,113 @@ func decodeData(dev device, entry loradata) bool {
 		if len(parsedvalues) == 0 {
 			return false
 		}
-	
+
 		publishPeopleCounterData(dev, entry, parsedvalues)
-		
+
 		return true
 
-
-case "tetraedretillquistdiz":
+	case "tetraedretillquistdiz":
 		fmt.Println("tetraedretillquistdiz")
 
-			parsedvalues := parseTETRAEDRETillquistDIZDataData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parseTETRAEDRETillquistDIZDataData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishTETRAEDRETillquistDIZData(dev, entry, parsedvalues)
 		//storeOnYieldData(deviceEUI, parsedvalues)
 		return true
 
-case "tetraedre_abb_b24":
+	case "tetraedre_abb_b24":
 		fmt.Println("tetraedre_abb_b24")
 
-			parsedvalues := parseTETRAEDRE_ABB_B24DataData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parseTETRAEDRE_ABB_B24DataData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishTETRAEDRE_ABB_B24Data(dev, entry, parsedvalues)
 		//storeOnYieldData(deviceEUI, parsedvalues)
 		return true
-case "tetraedregwfmtk3":
+	case "tetraedregwfmtk3":
 		fmt.Println("tetraedregwfmtk3")
 
-			parsedvalues := parsedTetraedreGWFMTK3Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parsedTetraedreGWFMTK3Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishTetraedreGWFMTK3Data(dev, entry, parsedvalues)
-		
+
 		return true
-		
-case "adeunius_modbus_ecs_link":
+
+	case "adeunius_modbus_ecs_link":
 		fmt.Println("adeunius_modbus_ecs_link")
 
-			parsedvalues := parsedAdeunius_ModBus_ECS_LinkData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parsedAdeunius_ModBus_ECS_LinkData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishAdeunius_ModBus_ECS_LinkData(dev, entry, parsedvalues)
-		
+
 		return true
-case "tetraedre_cyble_2":
+	case "tetraedre_cyble_2":
 		fmt.Println("Tetraedre_Cyble_2")
 
-			parsedvalues := parsedTetraedre_Cyble_2Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parsedTetraedre_Cyble_2Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishTetraedre_Cyble_2Data(dev, entry, parsedvalues)
-		
+
 		return true
-		
-case "tetraedrelogt550":
+
+	case "tetraedrelogt550":
 		fmt.Println("tetraedrelogt550")
 
-			parsedvalues := parsedTetraedreLoGT550Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parsedTetraedreLoGT550Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishTetraedreLoGT550Data(dev, entry, parsedvalues)
-		
+
 		return true
-case "tetraedrearmatec":
+	case "tetraedrearmatec":
 		fmt.Println("TetraedreArmaTec")
 
-			parsedvalues := parsedTetraedreArmaTecData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parsedTetraedreArmaTecData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishTetraedreArmaTecData(dev, entry, parsedvalues)
-		
+
 		return true
-		
-case "cubecellconductivity":
+
+	case "cubecellconductivity":
 		fmt.Println("CubeCellConductivity")
 
-			parsedvalues := parsedCubeCellConductivityData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parsedCubeCellConductivityData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishCubeCellConductivityData(dev, entry, parsedvalues)
-		
-		return true		
-case "tetraedraedcba":
+
+		return true
+	case "tetraedraedcba":
 		fmt.Println("TetraedraEDCBA")
 
-			parsedvalues := parseTetraedraEDCBADataData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parseTetraedraEDCBADataData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishTetraedraEDCBAData(dev, entry, parsedvalues)
-		
+
 		return true
 	case "oy1210":
 		fmt.Println("OY1210")
@@ -342,14 +339,13 @@ case "tetraedraedcba":
 		//storeOnYieldData(deviceEUI, parsedvalues)
 		return true
 
-
 	case "oy1320v1":
 		fmt.Println("OY1320VI")
 
-			parsedvalues := parseOY1320V1Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
+		parsedvalues := parseOY1320V1Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
 
 		//var parsedvalues []OY1320VIData
 		//Irrespective of the publish result, we must respond SUCCESS to the network server
@@ -357,117 +353,116 @@ case "tetraedraedcba":
 		//storeOnYieldData(deviceEUI, parsedvalues)
 		return true
 
-case "wateriwmlr3":
+	case "wateriwmlr3":
 		fmt.Println("wateriwmlr3")
 
-			parsedvalues := parseWaterIWMLR3Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parseWaterIWMLR3Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		//var parsedvalues []OY1320VIData
 		//Irrespective of the publish result, we must respond SUCCESS to the network server
 		publishWaterIWMLR3Data(dev, entry, parsedvalues)
 		//storeOnYieldData(deviceEUI, parsedvalues)
 		return true
 
-case "digimondometer":
+	case "digimondometer":
 		fmt.Println("DigimondoMeter")
 
-			parsedvalues := parsedDigimondoMeterData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parsedDigimondoMeterData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		//var parsedvalues []OY1320VIData
 		//Irrespective of the publish result, we must respond SUCCESS to the network server
 		publishDigimondoMeterData(dev, entry, parsedvalues)
 		//storeOnYieldData(deviceEUI, parsedvalues)
 		return true
 
-        case "oy1400":
-                fmt.Println("OY1400")
-                parsedvalues := parseOY1400Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+	case "oy1400":
+		fmt.Println("OY1400")
+		parsedvalues := parseOY1400Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
 
-               if len(parsedvalues) == 0 {
-                fmt.Println("oops")
-                return false
-                }
+		if len(parsedvalues) == 0 {
+			fmt.Println("oops")
+			return false
+		}
 
-                //Irrespective of the publish result, we must respond SUCCESS to the network server
-                publishOY1400Data(dev, entry, parsedvalues)
-                //storeOnYieldData(deviceEUI, parsedvalues)
-                return true
-      case "oy1410":
-                fmt.Println("OY1410")
-                parsedvalues := parseOY1410Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		//Irrespective of the publish result, we must respond SUCCESS to the network server
+		publishOY1400Data(dev, entry, parsedvalues)
+		//storeOnYieldData(deviceEUI, parsedvalues)
+		return true
+	case "oy1410":
+		fmt.Println("OY1410")
+		parsedvalues := parseOY1410Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
 
-               if len(parsedvalues) == 0 {
-                fmt.Println("oops")
-                return false
-                }
+		if len(parsedvalues) == 0 {
+			fmt.Println("oops")
+			return false
+		}
 
-                //Irrespective of the publish result, we must respond SUCCESS to the network server
-                publishOY1410Data(dev, entry, parsedvalues)
-                //storeOnYieldData(deviceEUI, parsedvalues)
-                return true
-        case "oy1600v1":
-                fmt.Println("OY1600V1")
-                       
-                parsedvalues := parseOY1600V1Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-                  if len(parsedvalues) == 0 {
-                      return false
-                  }
-                
-                //var parsedvalues []OY1600V1Data
-                //Irrespective of the publish result, we must respond SUCCESS to the network server
-                publishOY1600V1Data(dev, entry, parsedvalues)
-                //storeOnYieldData(deviceEUI, parsedvalues)
-                return true	
+		//Irrespective of the publish result, we must respond SUCCESS to the network server
+		publishOY1410Data(dev, entry, parsedvalues)
+		//storeOnYieldData(deviceEUI, parsedvalues)
+		return true
+	case "oy1600v1":
+		fmt.Println("OY1600V1")
 
-      case "unknown":
-                fmt.Println("unknown")
-                       
-                parsedvalues := parseUNKNOWNData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-                  if len(parsedvalues) == 0 {
-                      return false
-                  }
-                
-               
-                publishUNKNOWNData(dev, entry, parsedvalues)
-                
-                return true	
-       case "smartmc0101door":
-               fmt.Println("smartmc0101door")
-              parsedvalues := parsedSmartMC0101DoorData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-                if len(parsedvalues) == 0 {
-                    return false
-               }
-                  //var parsedvalues []OY1600Data
-                //Irrespective of the publish result, we must respond SUCCESS to the network server
-                publishSmartMC0101DoorData(dev, entry, parsedvalues)
-                //storeOnYieldData(deviceEUI, parsedvalues)
-        return true
-		
-       case "oy1600":
-               fmt.Println("OY1600")
-              parsedvalues := parseOY1600Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-                if len(parsedvalues) == 0 {
-                    return false
-               }
-                  //var parsedvalues []OY1600Data
-                //Irrespective of the publish result, we must respond SUCCESS to the network server
-                publishOY1600Data(dev, entry, parsedvalues)
-                //storeOnYieldData(deviceEUI, parsedvalues)
-        return true
-case "landisgyr":
+		parsedvalues := parseOY1600V1Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
+		//var parsedvalues []OY1600V1Data
+		//Irrespective of the publish result, we must respond SUCCESS to the network server
+		publishOY1600V1Data(dev, entry, parsedvalues)
+		//storeOnYieldData(deviceEUI, parsedvalues)
+		return true
+
+	case "unknown":
+		fmt.Println("unknown")
+
+		parsedvalues := parseUNKNOWNData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
+		publishUNKNOWNData(dev, entry, parsedvalues)
+
+		return true
+	case "smartmc0101door":
+		fmt.Println("smartmc0101door")
+		parsedvalues := parsedSmartMC0101DoorData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+		//var parsedvalues []OY1600Data
+		//Irrespective of the publish result, we must respond SUCCESS to the network server
+		publishSmartMC0101DoorData(dev, entry, parsedvalues)
+		//storeOnYieldData(deviceEUI, parsedvalues)
+		return true
+
+	case "oy1600":
+		fmt.Println("OY1600")
+		parsedvalues := parseOY1600Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+		//var parsedvalues []OY1600Data
+		//Irrespective of the publish result, we must respond SUCCESS to the network server
+		publishOY1600Data(dev, entry, parsedvalues)
+		//storeOnYieldData(deviceEUI, parsedvalues)
+		return true
+	case "landisgyr":
 		fmt.Println("LandisGyr")
 
-			parsedvalues := parseLandisGyrData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parseLandisGyrData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		//var parsedvalues []OY1320VIData
 		//Irrespective of the publish result, we must respond SUCCESS to the network server
 		publishLandisGyrData(dev, entry, parsedvalues)
@@ -476,48 +471,48 @@ case "landisgyr":
 	case "smartvalve":
 		fmt.Println("SmartValve")
 
-			parsedvalues := parseSmartValveData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parseSmartValveData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishSmartValveData(dev, entry, parsedvalues)
-		
+
 		return true
-		
-case "lr210":
+
+	case "lr210":
 		fmt.Println("LR210")
 
-			parsedvalues := parseLR210Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
-			if len(parsedvalues) == 0 {
-				return false
-			}
-		
+		parsedvalues := parseLR210Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
+		if len(parsedvalues) == 0 {
+			return false
+		}
+
 		publishLR210Data(dev, entry, parsedvalues)
-		
-		return true	
-		
+
+		return true
+
 	case "tds_100f_flow":
 		fmt.Println("TDS_100F_Flow")
 		parsedvalues := parsedTDS_100F_FlowData(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
 		if len(parsedvalues) == 0 {
 			return false
 		}
-	
+
 		publishTDS_100F_FlowData(dev, entry, parsedvalues)
-		
-		return true	
+
+		return true
 	case "honeywell_ew773":
 		fmt.Println("honeywell_ew773")
 		parsedvalues := parsedhoneywellew773Data(extractTimewithTimeZone(entry.Time), entry.Port, entry.Data)
 		if len(parsedvalues) == 0 {
 			return false
 		}
-	
+
 		publishHoneywell_EW773Data(dev, entry, parsedvalues)
-		
-		return true	
-		
+
+		return true
+
 	case "esab":
 		fmt.Println("ESAB")
 		//return decodeESABData()
@@ -526,12 +521,12 @@ case "lr210":
 		fmt.Println("Tracker")
 		//return decodeTrackerData()
 		return false
-					
+
 	case "downlink":
-		  
-        fmt.Println("downlink Wrong area")
-       	return true		
-	
+
+		fmt.Println("downlink Wrong area")
+		return true
+
 	default:
 		return false
 	}
@@ -541,7 +536,7 @@ func printIncomingData(entry loradata) {
 	fmt.Println("Received:", entry.Time, entry.DeviceEui, entry.Data)
 }
 func printIncomingDownlinkData(entry downlinkdata) {
-	fmt.Println("Received:",  entry.DeviceEui, entry.value,entry.Command,entry.AccessToken,entry.Devicetype)
+	fmt.Println("Received:", entry.DeviceEui, entry.value, entry.Command, entry.AccessToken, entry.Devicetype)
 }
 func extractTimewithTimeZone(timestring string) time.Time {
 	//timestringwithtimezone := strings.Replace(timestring, " ", "T", 1) + "+00:00"
@@ -582,6 +577,5 @@ func processDownlinkData(entry downlinkdata) bool {
 		return false
 	}
 
-	
-	return decodeDataDownlink(dev,entry)
+	return decodeDataDownlink(dev, entry)
 }

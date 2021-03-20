@@ -4,17 +4,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"time"
 	"strconv"
+	"time"
 )
 
 type OY1410Data struct {
-   
-	Pulses     float64
-	Status      uint8
-	
-	Time        time.Time
-	
+	Pulses float64
+	Status uint8
+
+	Time time.Time
 }
 
 type decoded1410data struct {
@@ -37,53 +35,52 @@ func parseOY1410Data(receivedtime time.Time, port uint8, receiveddata string) []
 	//Input Validation
 	//Length should be a multiple of 6
 	databytes, _ := base64.StdEncoding.DecodeString(receiveddata)
-	
-fmt.Println("databytes", databytes)
-dst := ByteToHex(databytes)
-fmt.Println("Hex=",dst)
-first := dst[4:12]
-first1 := dst[12:14]
-fmt.Println("first=",first)
-fmt.Println("first1=",first1)
+
+	fmt.Println("databytes", databytes)
+	dst := ByteToHex(databytes)
+	fmt.Println("Hex=", dst)
+	first := dst[4:12]
+	first1 := dst[12:14]
+	fmt.Println("first=", first)
+	fmt.Println("first1=", first1)
 
 	var parsedvalues []OY1410Data
 	// switch port {
 	// case 1: //status
 	// case 2: //periodic single measurement
-		if len(databytes) != 7 {
-			return nil
-		}
-		//fmt.Println("databytes", databytes)
-		capacity := len(databytes) / 7
-		parsedvalues = make([]OY1410Data, capacity)
-		sat, err :=strconv.ParseInt(hexaNumberToInteger(first), 16, 64)
-		sat1,err :=strconv.ParseInt(hexaNumberToInteger(first1), 16, 64)
-		if err != nil {
-      // handle error
-   }
-		for index := 0; index < capacity; index++ {
-		
-		
-			parsedvalues[index].Pulses = float64(sat)/1000.0
-			parsedvalues[index].Status  = uint8(sat1)
-			
-			parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
-		 }
+	if len(databytes) != 7 {
+		return nil
+	}
+	//fmt.Println("databytes", databytes)
+	capacity := len(databytes) / 7
+	parsedvalues = make([]OY1410Data, capacity)
+	sat, _ := strconv.ParseInt(hexaNumberToInteger(first), 16, 64)
+	sat1, _ := strconv.ParseInt(hexaNumberToInteger(first1), 16, 64)
+	// if err != nil {
+	// 	// handle error
+	// }
+	for index := 0; index < capacity; index++ {
+
+		parsedvalues[index].Pulses = float64(sat) / 1000.0
+		parsedvalues[index].Status = uint8(sat1)
+
+		parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
+	}
 	// case 3: //periodic group measurement
-		// if len(databytes)%5 != 1 {
-			// return nil
-		// }
-		// databytes = databytes[1:]
-		// capacity := len(databytes) / 5
-		// parsedvalues = make([]OY1410Data, capacity)
-		// for index := 0; index < capacity; index++ {
-			// parsedvalues[index].Temperature = float32((int32(databytes[index*5])<<4|(int32(databytes[(index*5)+2])&0xF0)>>4)-800) / 10.0
-			// parsedvalues[index].Humidity = float32((int32(databytes[(index*5)+1])<<4|(int32(databytes[(index*5)+2])&0x0F))-250) / 10.0
-			// parsedvalues[index].Co2 = uint16(databytes[(index*7)+3])<<8 + uint16(databytes[(index*7)+4])
-			// parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
-		// }
+	// if len(databytes)%5 != 1 {
+	// return nil
+	// }
+	// databytes = databytes[1:]
+	// capacity := len(databytes) / 5
+	// parsedvalues = make([]OY1410Data, capacity)
+	// for index := 0; index < capacity; index++ {
+	// parsedvalues[index].Temperature = float32((int32(databytes[index*5])<<4|(int32(databytes[(index*5)+2])&0xF0)>>4)-800) / 10.0
+	// parsedvalues[index].Humidity = float32((int32(databytes[(index*5)+1])<<4|(int32(databytes[(index*5)+2])&0x0F))-250) / 10.0
+	// parsedvalues[index].Co2 = uint16(databytes[(index*7)+3])<<8 + uint16(databytes[(index*7)+4])
+	// parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
+	// }
 	// default:
-		// return nil
+	// return nil
 	// }
 
 	return parsedvalues
@@ -96,10 +93,10 @@ func publishOY1410Data(dev device, entry loradata, parsedvalues []OY1410Data) {
 		return
 	}
 
-	if dev.RawData == false {
+	if !dev.RawData {
 		var decodeddata decoded1410data
 		if err := json.Unmarshal([]byte(loradatabytes), &decodeddata); err != nil {
-			//fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
+			fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
 		}
 		decodeddata.Data = append(decodeddata.Data, parsedvalues...)
 

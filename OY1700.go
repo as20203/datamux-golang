@@ -8,12 +8,12 @@ import (
 )
 
 type OY1700Data struct {
-	Time        time.Time
-	Temperature float32
-	RelativeHumidity    float32
-	PM10        uint16
-	PM2_5       uint16
-	PM1_0        uint16
+	Time             time.Time
+	Temperature      float32
+	RelativeHumidity float32
+	PM10             uint16
+	PM2_5            uint16
+	PM1_0            uint16
 }
 
 type decoded1700data struct {
@@ -36,28 +36,28 @@ func parseOY1700Data(receivedtime time.Time, port uint8, receiveddata string) []
 	//Input Validation
 	//Length should be a multiple of 6
 	databytes, _ := base64.StdEncoding.DecodeString(receiveddata)
-    	var parsedvalues []OY1700Data
+	var parsedvalues []OY1700Data
 	switch port {
 	case 1: //status
 	case 2: //periodic single measurement
-	
-	if len(databytes) != 9 {
+
+		if len(databytes) != 9 {
 			return nil
 		}
 		//fmt.Println("databytes", databytes)
 		capacity := len(databytes) / 9
 		parsedvalues = make([]OY1700Data, capacity)
 		for index := 0; index < capacity; index++ {
-		  fmt.Println("Adil1")
-                  	parsedvalues[index].Temperature = float32((int32(databytes[index*9])<<4|(int32(databytes[(index*9)+2])&0xF0)>>4)-800) / 10.0
+			fmt.Println("Adil1")
+			parsedvalues[index].Temperature = float32((int32(databytes[index*9])<<4|(int32(databytes[(index*9)+2])&0xF0)>>4)-800) / 10.0
 			parsedvalues[index].RelativeHumidity = float32((int32(databytes[(index*9)+1])<<4|(int32(databytes[(index*9)+2])&0x0F))-250) / 10.0
 			parsedvalues[index].PM1_0 = uint16(databytes[(index*9)+3])<<8 + uint16(databytes[(index*9)+4])
 			parsedvalues[index].PM2_5 = uint16(databytes[(index*9)+5])<<8 + uint16(databytes[(index*9)+6])
 			parsedvalues[index].PM10 = uint16(databytes[(index*9)+7])<<8 + uint16(databytes[(index*9)+8])
 			parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
- fmt.Println("Adil2")
-		
-}
+			fmt.Println("Adil2")
+
+		}
 	case 3: //periodic group measurement
 		if len(databytes)%9 != 1 {
 			return nil
@@ -66,18 +66,15 @@ func parseOY1700Data(receivedtime time.Time, port uint8, receiveddata string) []
 		capacity := len(databytes) / 7
 		parsedvalues = make([]OY1700Data, capacity)
 		for index := 0; index < capacity; index++ {
-		
-			 
 
-                 	parsedvalues[index].Temperature = float32((int32(databytes[index*9])<<4|(int32(databytes[(index*9)+2])&0xF0)>>4)-800) / 10.0
+			parsedvalues[index].Temperature = float32((int32(databytes[index*9])<<4|(int32(databytes[(index*9)+2])&0xF0)>>4)-800) / 10.0
 			parsedvalues[index].RelativeHumidity = float32((int32(databytes[(index*9)+1])<<4|(int32(databytes[(index*9)+2])&0x0F))-250) / 10.0
 			parsedvalues[index].PM1_0 = uint16(databytes[(index*9)+3])<<8 + uint16(databytes[(index*9)+4])
 			parsedvalues[index].PM2_5 = uint16(databytes[(index*9)+5])<<8 + uint16(databytes[(index*9)+6])
 			parsedvalues[index].PM10 = uint16(databytes[(index*9)+7])<<8 + uint16(databytes[(index*9)+8])
 			parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
-                         
-		
-}
+
+		}
 	default:
 		return nil
 	}
@@ -92,10 +89,10 @@ func publishOY1700Data(dev device, entry loradata, parsedvalues []OY1700Data) {
 		return
 	}
 
-	if dev.RawData == false {
+	if !dev.RawData {
 		var decodeddata decoded1700data
 		if err := json.Unmarshal([]byte(loradatabytes), &decodeddata); err != nil {
-			//fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
+			fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
 		}
 		decodeddata.Data = append(decodeddata.Data, parsedvalues...)
 

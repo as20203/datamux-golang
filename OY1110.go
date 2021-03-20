@@ -1,12 +1,11 @@
-
 package main
 
 import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"time"
 	"math"
+	"time"
 )
 
 /*
@@ -15,12 +14,11 @@ import (
 
 //type onyielddata struct {
 //        Time        time.Time
-//        Temperature float64 
-//        Humidity    float64 
-//        V       float64 
-       
-//}
+//        Temperature float64
+//        Humidity    float64
+//        V       float64
 
+//}
 
 type decoded1100data struct {
 	DeviceEui string        `json:"deviceEui"`
@@ -37,7 +35,7 @@ func parseOY1110Data(receivedtime time.Time, port uint8, receiveddata string) []
 
 	//Input Validation
 	//Length should be a multiple of 6
- var expval, VS,F1,F2,F3,F4,F5,hamza,hadi float64 
+	var expval, VS, F1, F2, F3, F4, F5, hamza, hadi float64
 	databytes, _ := base64.StdEncoding.DecodeString(receiveddata)
 	var parsedvalues []onyielddata
 	switch port {
@@ -52,41 +50,36 @@ func parseOY1110Data(receivedtime time.Time, port uint8, receiveddata string) []
 		for index := 0; index < capacity; index++ {
 			parsedvalues[index].Temperature = float64((int32(databytes[index*3])<<4|(int32(databytes[(index*3)+2])&0xF0)>>4)-800) / 10.0
 			parsedvalues[index].RelativeHumidity = float64((int32(databytes[(index*3)+1])<<4|(int32(databytes[(index*3)+2])&0x0F))-250) / 10.0
-			if parsedvalues[index].Temperature >= -50 &&  parsedvalues[index].Temperature <= -0.1 {
-                hamza=2* math.Pow(37.230718,2)
+			if parsedvalues[index].Temperature >= -50 && parsedvalues[index].Temperature <= -0.1 {
+				hamza = 2 * math.Pow(37.230718, 2)
 
-				hadi= math.Pow((108.19749 - parsedvalues[index].Temperature),2) * -1
-				fmt.Println("hadi",hadi )
-				expval= hadi/hamza
-                    fmt.Println("expval",expval ) 
-               fmt.Println("math.Pow((108.19749 - parsedvalues[index].Temperature),2)",math.Pow((108.19749 - parsedvalues[index].Temperature),2) )					
-				VS=330.67796* math.Exp(expval)
-				parsedvalues[index].AbsoluteHumidity=fmt.Sprintf("%.2f", VS)
-				fmt.Println("parsedvalues[index].absoluteHumidity",parsedvalues[index].AbsoluteHumidity )
-                            
+				hadi = math.Pow((108.19749-parsedvalues[index].Temperature), 2) * -1
+				fmt.Println("hadi", hadi)
+				expval = hadi / hamza
+				fmt.Println("expval", expval)
+				fmt.Println("math.Pow((108.19749 - parsedvalues[index].Temperature),2)", math.Pow((108.19749-parsedvalues[index].Temperature), 2))
+				VS = 330.67796 * math.Exp(expval)
+				parsedvalues[index].AbsoluteHumidity = fmt.Sprintf("%.2f", VS)
+				fmt.Println("parsedvalues[index].absoluteHumidity", parsedvalues[index].AbsoluteHumidity)
 
- 
 			}
-			if  parsedvalues[index].Temperature >= 0.0 && parsedvalues[index].Temperature <=100.0 {
-					F1=0.33229003 *  parsedvalues[index].Temperature
-					F2=0.010508257*math.Pow(parsedvalues[index].Temperature,2)
-					F3=0.00015035187*math.Pow(parsedvalues[index].Temperature,3)
-					F4=0.0000021798571* math.Pow(parsedvalues[index].Temperature,4)
-					F5=0.000000008613191 * math.Pow(parsedvalues[index].Temperature,5)
-				
-					 VS=4.8559296+F1+F2+F3+F4+F5
-					V1:=(VS*parsedvalues[index].RelativeHumidity) / 100
-					fmt.Println("parsedvalues[index].RelativeHumidity",parsedvalues[index].RelativeHumidity )
-					parsedvalues[index].AbsoluteHumidity=fmt.Sprintf("%.2f", V1)
-					fmt.Println("parsedvalues[index].absoluteHumidity",parsedvalues[index].AbsoluteHumidity )
-			}
-            
+			if parsedvalues[index].Temperature >= 0.0 && parsedvalues[index].Temperature <= 100.0 {
+				F1 = 0.33229003 * parsedvalues[index].Temperature
+				F2 = 0.010508257 * math.Pow(parsedvalues[index].Temperature, 2)
+				F3 = 0.00015035187 * math.Pow(parsedvalues[index].Temperature, 3)
+				F4 = 0.0000021798571 * math.Pow(parsedvalues[index].Temperature, 4)
+				F5 = 0.000000008613191 * math.Pow(parsedvalues[index].Temperature, 5)
 
- 
+				VS = 4.8559296 + F1 + F2 + F3 + F4 + F5
+				V1 := (VS * parsedvalues[index].RelativeHumidity) / 100
+				fmt.Println("parsedvalues[index].RelativeHumidity", parsedvalues[index].RelativeHumidity)
+				parsedvalues[index].AbsoluteHumidity = fmt.Sprintf("%.2f", V1)
+				fmt.Println("parsedvalues[index].absoluteHumidity", parsedvalues[index].AbsoluteHumidity)
+			}
+
 			parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
-               
-		
-}
+
+		}
 	case 3: //periodic group measurement
 		if len(databytes)%3 != 1 {
 			return nil
@@ -97,29 +90,29 @@ func parseOY1110Data(receivedtime time.Time, port uint8, receiveddata string) []
 		for index := 0; index < capacity; index++ {
 			parsedvalues[index].Temperature = float64((int32(databytes[index*3])<<4|(int32(databytes[(index*3)+2])&0xF0)>>4)-800) / 10.0
 			parsedvalues[index].RelativeHumidity = float64((int32(databytes[(index*3)+1])<<4|(int32(databytes[(index*3)+2])&0x0F))-250) / 10.0
-			if parsedvalues[index].Temperature >= -50 &&  parsedvalues[index].Temperature <= -0.1 {
-                hamza=2* math.Pow(37.230718,2)
-				expval= ((math.Pow((108.19749 - parsedvalues[index].Temperature),2)) * -1)/hamza
-                        fmt.Println("expval",expval ) 
-						fmt.Println("math.Pow((108.19749 - parsedvalues[index].Temperature),2)",math.Pow((108.19749 - parsedvalues[index].Temperature),2) )
-						
-				VS=330.67796 * math.Exp(expval)
-				parsedvalues[index].AbsoluteHumidity=fmt.Sprintf("%.2f", VS)
-				fmt.Println("parsedvalues[index].absoluteHumidity",parsedvalues[index].AbsoluteHumidity )
+			if parsedvalues[index].Temperature >= -50 && parsedvalues[index].Temperature <= -0.1 {
+				hamza = 2 * math.Pow(37.230718, 2)
+				expval = ((math.Pow((108.19749 - parsedvalues[index].Temperature), 2)) * -1) / hamza
+				fmt.Println("expval", expval)
+				fmt.Println("math.Pow((108.19749 - parsedvalues[index].Temperature),2)", math.Pow((108.19749-parsedvalues[index].Temperature), 2))
+
+				VS = 330.67796 * math.Exp(expval)
+				parsedvalues[index].AbsoluteHumidity = fmt.Sprintf("%.2f", VS)
+				fmt.Println("parsedvalues[index].absoluteHumidity", parsedvalues[index].AbsoluteHumidity)
 			}
-			if  parsedvalues[index].Temperature >= 0.0 && parsedvalues[index].Temperature <=100.0 {
-			F1=0.33229003 *  parsedvalues[index].Temperature
-			F2=0.010508257*math.Pow(parsedvalues[index].Temperature,2)
-			F3=0.00015035187*math.Pow(parsedvalues[index].Temperature,3)
-			F4=0.0000021798571* math.Pow(parsedvalues[index].Temperature,4)
-			F5=0.000000008613191 * math.Pow(parsedvalues[index].Temperature,5)
-		
-			 VS=4.8559296+F1+F2+F3+F4+F5
-			 V1:=(VS*parsedvalues[index].RelativeHumidity) / 100
-             parsedvalues[index].AbsoluteHumidity=fmt.Sprintf("%.2f", V1)
+			if parsedvalues[index].Temperature >= 0.0 && parsedvalues[index].Temperature <= 100.0 {
+				F1 = 0.33229003 * parsedvalues[index].Temperature
+				F2 = 0.010508257 * math.Pow(parsedvalues[index].Temperature, 2)
+				F3 = 0.00015035187 * math.Pow(parsedvalues[index].Temperature, 3)
+				F4 = 0.0000021798571 * math.Pow(parsedvalues[index].Temperature, 4)
+				F5 = 0.000000008613191 * math.Pow(parsedvalues[index].Temperature, 5)
+
+				VS = 4.8559296 + F1 + F2 + F3 + F4 + F5
+				V1 := (VS * parsedvalues[index].RelativeHumidity) / 100
+				parsedvalues[index].AbsoluteHumidity = fmt.Sprintf("%.2f", V1)
 			}
-            
-       			parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
+
+			parsedvalues[index].Time = receivedtime.Add(time.Duration((-15)*index) * time.Minute)
 		}
 	default:
 		return nil
@@ -135,10 +128,10 @@ func publishOY1110Data(dev device, entry loradata, parsedvalues []onyielddata) {
 		return
 	}
 
-	if dev.RawData == false {
+	if !dev.RawData {
 		var decodeddata decoded1100data
 		if err := json.Unmarshal([]byte(loradatabytes), &decodeddata); err != nil {
-			//fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
+			fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
 		}
 		decodeddata.Data = append(decodeddata.Data, parsedvalues...)
 

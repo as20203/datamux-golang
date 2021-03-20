@@ -8,22 +8,22 @@ import (
 )
 
 type UNKNOWNData struct {
-	Time        time.Time
-	CO2Raw      uint16	
-//	CO2Filtered    uint16
-//	Temperature   float32
-//	Humidity       float32
-	
+	Time   time.Time
+	CO2Raw uint16
+	//	CO2Filtered    uint16
+	//	Temperature   float32
+	//	Humidity       float32
+
 }
 
 type decodedunknowndata struct {
-	DeviceEui string       `json:"deviceEui"`
-	Seqno     uint32       `json:"seqno"`
-	Port      uint8        `json:"port"`
-	AppEui    string       `json:"appEui"`
-	Time      string       `json:"time"`
-	DeviceTx  devicetx     `json:"deviceTx,omitempty"`
-	GatewayRx []gatewayrx  `json:"gatewayRx,omitempty"`
+	DeviceEui string        `json:"deviceEui"`
+	Seqno     uint32        `json:"seqno"`
+	Port      uint8         `json:"port"`
+	AppEui    string        `json:"appEui"`
+	Time      string        `json:"time"`
+	DeviceTx  devicetx      `json:"deviceTx,omitempty"`
+	GatewayRx []gatewayrx   `json:"gatewayRx,omitempty"`
 	Data      []UNKNOWNData `json:"data,omitempty"`
 }
 
@@ -35,28 +35,25 @@ func parseUNKNOWNData(receivedtime time.Time, port uint8, receiveddata string) [
 
 	//Input Validation
 	//Length should be a multiple of 6
-//        fmt.Println("receiveddata",receiveddata)
+	//        fmt.Println("receiveddata",receiveddata)
 	databytes, _ := base64.StdEncoding.DecodeString(receiveddata)
 	var parsedvalues []UNKNOWNData
-	
+
 	fmt.Println("port", port)
-//        fmt.Println("length", len(databytes))
+	//        fmt.Println("length", len(databytes))
 
-		fmt.Println("databytes", databytes)
-		
-                parsedvalues = make([]UNKNOWNData, 1)
-		
-parsedvalues[0].CO2Raw = uint16(databytes[2])
+	fmt.Println("databytes", databytes)
 
-//parsedvalues[0].CO2Filtered = uint16(databytes[4])<<8 + uint16(databytes[5])
+	parsedvalues = make([]UNKNOWNData, 1)
 
-//parsedvalues[0].Temperature = float32(uint16(databytes[6])<<8 + uint16(databytes[7]))/100.0
-//parsedvalues[0].Humidity = float32(uint16(databytes[8])<<8 + uint16(databytes[9]))/100.0
-			
-			parsedvalues[0].Time = receivedtime.Add(time.Duration((-15)*0) * time.Minute)
-		
+	parsedvalues[0].CO2Raw = uint16(databytes[2])
 
-	
+	//parsedvalues[0].CO2Filtered = uint16(databytes[4])<<8 + uint16(databytes[5])
+
+	//parsedvalues[0].Temperature = float32(uint16(databytes[6])<<8 + uint16(databytes[7]))/100.0
+	//parsedvalues[0].Humidity = float32(uint16(databytes[8])<<8 + uint16(databytes[9]))/100.0
+
+	parsedvalues[0].Time = receivedtime.Add(time.Duration((-15)*0) * time.Minute)
 
 	return parsedvalues
 }
@@ -68,10 +65,10 @@ func publishUNKNOWNData(dev device, entry loradata, parsedvalues []UNKNOWNData) 
 		return
 	}
 
-	if dev.RawData == false {
+	if !dev.RawData {
 		var decodeddata decodedunknowndata
 		if err := json.Unmarshal([]byte(loradatabytes), &decodeddata); err != nil {
-			//fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
+			fmt.Println("Failed to encode message", err) //This error is ok as the format of data is different
 		}
 		decodeddata.Data = append(decodeddata.Data, parsedvalues...)
 
@@ -84,7 +81,7 @@ func publishUNKNOWNData(dev device, entry loradata, parsedvalues []UNKNOWNData) 
 		fmt.Println("Data sent: ", string(loradecodeddatabytes))
 		transferDatatoEndPoint(loradecodeddatabytes, dev)
 	} else {
-	fmt.Println("Data sent: ", string(loradatabytes))
+		fmt.Println("Data sent: ", string(loradatabytes))
 		transferDatatoEndPoint(loradatabytes, dev)
 	}
 

@@ -35,12 +35,11 @@ func downlink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := processDownlinkData(loradataentry)
-	if response == true {
+	if response {
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusExpectationFailed)
 	}
-	return
 }
 
 func saveLoraData(w http.ResponseWriter, r *http.Request) {
@@ -61,12 +60,11 @@ func saveLoraData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := processLoraData(loradataentry)
-	if response == true {
+	if response {
 		w.WriteHeader(http.StatusOK)
 	} else {
 		w.WriteHeader(http.StatusExpectationFailed)
 	}
-	return
 }
 
 func showDevices(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +120,7 @@ func showDevice(w http.ResponseWriter, r *http.Request) {
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		panic(err)
 	}
-	var device bson.M
+	var device device
 	datamuxDatabase := client.Database("datamux")
 	devicesCollection := datamuxDatabase.Collection("devices")
 
@@ -131,7 +129,6 @@ func showDevice(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte(err.Error()))
 	} else {
-
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(device)
 	}
@@ -198,16 +195,6 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Successfully connected and pinged.")
 	datamuxDatabase := client.Database("datamux")
 	devicesCollection := datamuxDatabase.Collection("devices")
-	deviceResult, insertionError := devicesCollection.InsertOne(ctx, bson.D{
-		{Key: "deviceeui", Value: dev.Deviceeui},
-		{Key: "devicetype", Value: dev.Devicetype},
-		{Key: "endpointtype", Value: dev.Endpointtype},
-		{Key: "endpointdest", Value: dev.Endpointdest},
-		{Key: "access_token", Value: dev.Customer},
-		{Key: "incl_radio", Value: dev.InclRadio},
-		{Key: "raw_data", Value: dev.RawData},
-		{Key: "customer", Value: dev.Customer},
-	})
 	mod := mongo.IndexModel{
 		Keys: bson.M{
 			"deviceeui": 1, // index in ascending order
@@ -219,6 +206,17 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(indexError.Error()))
 	}
+	deviceResult, insertionError := devicesCollection.InsertOne(ctx, bson.D{
+		{Key: "deviceeui", Value: dev.Deviceeui},
+		{Key: "devicetype", Value: dev.Devicetype},
+		{Key: "endpointtype", Value: dev.Endpointtype},
+		{Key: "endpointdest", Value: dev.Endpointdest},
+		{Key: "access_token", Value: dev.Customer},
+		{Key: "incl_radio", Value: dev.InclRadio},
+		{Key: "raw_data", Value: dev.RawData},
+		{Key: "customer", Value: dev.Customer},
+	})
+
 	if insertionError != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
