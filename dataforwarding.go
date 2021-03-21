@@ -2,13 +2,21 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 func dec2hex(dec uint16) string {
@@ -43,6 +51,37 @@ func transferDatatoEndPoint(buf []byte, dev device) {
 		}
 
 	}
+	uri := "mongodb://localhost:27017/datamux"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
+	// Ping the primary
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		panic(err)
+	}
+	datamuxDatabase := client.Database("datamux")
+	devicesCollection := datamuxDatabase.Collection("devices")
+	result, err := devicesCollection.UpdateOne(
+		ctx,
+		bson.M{"deviceeui": dev.Deviceeui},
+		bson.M{
+			"$set": bson.M{
+				"last_updated_on": time.Now(),
+			},
+		},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Updated %v Documents!\n", result.ModifiedCount)
 }
 
 func pushdata(buf []byte, sEndpointty string, sEndpointdest string, dev1 device) {

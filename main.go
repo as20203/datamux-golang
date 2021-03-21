@@ -23,6 +23,7 @@ func main() {
 	router.HandleFunc("/apiV1/devices/add", addDevice).Methods("POST")
 	router.HandleFunc("/apiV1/devices/delete/{id}", deleteDevice).Methods("DELETE")
 	router.HandleFunc("/downlink", downlink)
+	router.HandleFunc("/apiV1/devices/update/{id}", updateDevice).Methods("PUT")
 
 	readConfig()
 	printConfig()

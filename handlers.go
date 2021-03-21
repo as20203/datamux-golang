@@ -84,7 +84,7 @@ func showDevices(w http.ResponseWriter, r *http.Request) {
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		panic(err)
 	}
-	var devices []bson.M
+	var devices []device
 	datamuxDatabase := client.Database("datamux")
 	devicesCollection := datamuxDatabase.Collection("devices")
 	filterCursor, err := devicesCollection.Find(ctx, bson.M{})
@@ -152,7 +152,6 @@ func deleteDevice(w http.ResponseWriter, r *http.Request) {
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		panic(err)
 	}
-	fmt.Println("Successfully connected and pinged.")
 	datamuxDatabase := client.Database("datamux")
 	devicesCollection := datamuxDatabase.Collection("devices")
 	deviceResult, deletionError := devicesCollection.DeleteOne(ctx, bson.M{
@@ -192,7 +191,6 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	fmt.Println("Successfully connected and pinged.")
 	datamuxDatabase := client.Database("datamux")
 	devicesCollection := datamuxDatabase.Collection("devices")
 	mod := mongo.IndexModel{
@@ -206,16 +204,18 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(indexError.Error()))
 	}
-	deviceResult, insertionError := devicesCollection.InsertOne(ctx, bson.D{
-		{Key: "deviceeui", Value: dev.Deviceeui},
-		{Key: "devicetype", Value: dev.Devicetype},
-		{Key: "endpointtype", Value: dev.Endpointtype},
-		{Key: "endpointdest", Value: dev.Endpointdest},
-		{Key: "access_token", Value: dev.Customer},
-		{Key: "incl_radio", Value: dev.InclRadio},
-		{Key: "raw_data", Value: dev.RawData},
-		{Key: "customer", Value: dev.Customer},
-	})
+	newDevice := device{
+		Deviceeui:     dev.Deviceeui,
+		Devicetype:    dev.Devicetype,
+		Endpointtype:  dev.Endpointtype,
+		Endpointdest:  dev.Endpointdest,
+		AccessToken:   dev.AccessToken,
+		InclRadio:     dev.InclRadio,
+		RawData:       dev.RawData,
+		Customer:      dev.Customer,
+		LastUpdatedOn: time.Now(),
+	}
+	deviceResult, insertionError := devicesCollection.InsertOne(ctx, newDevice)
 
 	if insertionError != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -226,4 +226,51 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(deviceResult)
 	}
 
+}
+
+func updateDevice(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	var dev device
+	_ = json.NewDecoder(r.Body).Decode(&dev)
+	uri := "mongodb://localhost:27017/datamux"
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
+	// Ping the primary
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		panic(err)
+	}
+	after := options.After
+	opts := options.FindOneAndUpdateOptions{
+		ReturnDocument: &after,
+	}
+	// update, _ := toDoc(&dev)
+	datamuxDatabase := client.Database("datamux")
+	devicesCollection := datamuxDatabase.Collection("devices")
+	result := devicesCollection.FindOneAndUpdate(
+		ctx,
+		bson.M{"deviceeui": params["id"]},
+		bson.M{
+			"$set": dev,
+		},
+		&opts,
+	)
+	if result.Err() != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(result.Err().Error()))
+	} else {
+		var doc device
+		result.Decode(&doc)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(doc)
+	}
 }
