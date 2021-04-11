@@ -204,16 +204,17 @@ func addDevice(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(indexError.Error()))
 	}
+	currentTime := time.Now()
 	newDevice := device{
-		Deviceeui:     dev.Deviceeui,
-		Devicetype:    dev.Devicetype,
-		Endpointtype:  dev.Endpointtype,
-		Endpointdest:  dev.Endpointdest,
-		AccessToken:   dev.AccessToken,
-		InclRadio:     dev.InclRadio,
-		RawData:       dev.RawData,
-		Customer:      dev.Customer,
-		LastUpdatedOn: time.Now(),
+		Deviceeui:    dev.Deviceeui,
+		Devicetype:   dev.Devicetype,
+		Endpointtype: dev.Endpointtype,
+		Endpointdest: dev.Endpointdest,
+		AccessToken:  dev.AccessToken,
+		InclRadio:    dev.InclRadio,
+		RawData:      dev.RawData,
+		Customer:     dev.Customer,
+		CreatedOn:    &currentTime,
 	}
 	deviceResult, insertionError := devicesCollection.InsertOne(ctx, newDevice)
 

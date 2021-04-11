@@ -24,11 +24,8 @@ func main() {
 	router.HandleFunc("/apiV1/devices/delete/{id}", deleteDevice).Methods("DELETE")
 	router.HandleFunc("/downlink", downlink)
 	router.HandleFunc("/apiV1/devices/update/{id}", updateDevice).Methods("PUT")
-
 	readConfig()
 	printConfig()
-	//createOutputFiles()
 	log.Fatal(http.ListenAndServe(":"+strconv.FormatUint(config.Listeningport, 10), handlers.CORS(header, methods, origins)(router)))
-	//log.Fatal(http.ListenAndServe(":"+strconv.FormatUint(config.Listeningport, 10), router))
-	//fpOnYieldData.Close()
+	log.Fatal(http.ListenAndServe(":"+strconv.FormatUint(config.Listeningport, 10), router))
 }

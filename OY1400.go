@@ -124,6 +124,7 @@ func parseOY1400Data(receivedtime time.Time, port uint8, receiveddata string) []
 				//val=(int32(databytes[index*5])<<4|(int32(databytes[(index*5)+1])&0xF0)>>4)
 				fmt.Println("val", val)
 				if val == 291 {
+					fmt.Println(" came here")
 					parsedvalues[index].AnalogCh1 = toFixed(float64(uint16(databytes[(index*5)+2])<<8+uint16(databytes[(index*5)+3]))*0.5125, 1)
 					fmt.Println("AnalogCh1", parsedvalues[index].AnalogCh1)
 					parsedvalues[index].DigitalCh2 = toFixed(float64(uint16(databytes[(index*5)+4])<<8+uint16(databytes[(index*5)+6]))*0.5125, 1)
@@ -186,7 +187,6 @@ func parseOY1400Data(receivedtime time.Time, port uint8, receiveddata string) []
 	default:
 		return nil
 	}
-
 	return parsedvalues
 }
 
